@@ -1,0 +1,28 @@
+meta {
+  name: CreateJob-rnaseq
+  type: http
+  seq: 5
+}
+
+post {
+  url: http://localhost:8080/v1/jobs
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+      "name": "rnaseq",
+      "pipeline": "{{pipeline}}",
+      "profile":"test",
+      "work_dir": "s3://{{stack-name}}-nextflow-work/{{pipeline}}",
+      "result_dir": "s3://{{stack-name}}-nextflow-results/{{pipeline}}",
+      "job_queue": "{{stack-name}}-spot-intel-rcm"
+  }
+  
+}
+
+vars:pre-request {
+  stack-name: euc1t20250319v4
+  pipeline: nf-core/rnaseq
+}

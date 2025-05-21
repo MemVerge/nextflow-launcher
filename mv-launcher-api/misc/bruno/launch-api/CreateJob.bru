@@ -1,0 +1,22 @@
+meta {
+  name: CreateJob
+  type: http
+  seq: 3
+}
+
+post {
+  url: http://localhost:8080/v1/jobs
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+      "name": "hello-v12",
+      "pipeline": "hello",
+      "work_dir": "s3://nextflow-workbucket-qnib-us-east-1",
+      "result_dir": "s3://nextflow-outbucket-qnib-us-east-1",
+      "job_queue": "euw2v11-spot-intel-rcm"
+  }
+  
+}

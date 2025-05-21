@@ -1,0 +1,16 @@
+version: '3'
+
+tasks:
+  vue:
+    dir: ./vue
+    cmds:
+      - npm run build
+    silent: true
+  swag:
+    cmds:
+      - swag init
+    silent: true
+  default:
+    deps: [vue, swag]
+    cmds:
+      - echo "Build dependencies"

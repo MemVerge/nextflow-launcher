@@ -1,0 +1,224 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {
+            "name": "GTM MemVerge Inc."
+        }
+    },
+    "paths": {
+        "/batch/queues": {
+            "get": {
+                "description": "Returns a JSON blob with a list of all queues",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "List all queues",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/api.BatchQueue"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Check the health of the API",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Health check endpoint",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/api.Status"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs": {
+            "get": {
+                "description": "Returns a JSON blob with a list of all jobs",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "List all jobs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/types.Job"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new job by uploading a JSON specification",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Create a new job",
+                "parameters": [
+                    {
+                        "description": "Job Specification",
+                        "name": "job",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.Job"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/types.Job"
+                        }
+                    }
+                }
+            }
+        },
+        "/pipeline": {
+            "get": {
+                "description": "Returns a JSON blob with a list of all jobs",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "List all available pipelines",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/types.Pipeline"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "api.BatchQueue": {
+            "type": "object",
+            "properties": {
+                "arn": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "api.Status": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
+        "types.Job": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "job_queue": {
+                    "type": "string",
+                    "example": "spot-xs"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "job-1234"
+                },
+                "pipeline": {
+                    "type": "string",
+                    "example": "hello"
+                },
+                "profile": {
+                    "type": "string",
+                    "example": "test"
+                },
+                "result_dir": {
+                    "type": "string",
+                    "example": "s3://nextflow-results"
+                },
+                "work_dir": {
+                    "type": "string",
+                    "example": "s3://nextflow-workbucket"
+                }
+            }
+        },
+        "types.Pipeline": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "example": "start.sh Ref::pipeline Ref::work-dir Ref::result-dir"
+                },
+                "image": {
+                    "type": "string",
+                    "example": "registry.gitlab.com/qnib-pub-containers/qnib/nextflow-workflow-run:24.10.4-1"
+                },
+                "memory": {
+                    "type": "string",
+                    "example": "2048"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "nextflow-pipeline"
+                },
+                "parameters": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "example": {
+                        " 'result-dir'": " 'addme'}",
+                        " 'work-dir'": " 'addme'",
+                        "{'pipeline'": " 'hello'"
+                    }
+                },
+                "vcpus": {
+                    "type": "string",
+                    "example": "1"
+                }
+            }
+        }
+    }
+}

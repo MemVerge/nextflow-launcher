@@ -1,0 +1,149 @@
+definitions:
+  api.BatchQueue:
+    properties:
+      arn:
+        type: string
+      name:
+        type: string
+      state:
+        type: string
+      status:
+        type: string
+    type: object
+  api.Status:
+    properties:
+      status:
+        example: ok
+        type: string
+    type: object
+  types.Job:
+    properties:
+      id:
+        type: string
+      job_queue:
+        example: spot-xs
+        type: string
+      name:
+        example: job-1234
+        type: string
+      pipeline:
+        example: hello
+        type: string
+      profile:
+        example: test
+        type: string
+      result_dir:
+        example: s3://nextflow-results
+        type: string
+      work_dir:
+        example: s3://nextflow-workbucket
+        type: string
+    type: object
+  types.Pipeline:
+    properties:
+      command:
+        example: start.sh Ref::pipeline Ref::work-dir Ref::result-dir
+        type: string
+      image:
+        example: registry.gitlab.com/qnib-pub-containers/qnib/nextflow-workflow-run:24.10.4-1
+        type: string
+      memory:
+        example: "2048"
+        type: string
+      name:
+        example: nextflow-pipeline
+        type: string
+      parameters:
+        additionalProperties:
+          type: string
+        example:
+          ' ''result-dir''': ' ''addme''}'
+          ' ''work-dir''': ' ''addme'''
+          '{''pipeline''': ' ''hello'''
+        type: object
+      vcpus:
+        example: "1"
+        type: string
+    type: object
+info:
+  contact:
+    name: GTM MemVerge Inc.
+paths:
+  /batch/queues:
+    get:
+      consumes:
+      - application/json
+      description: Returns a JSON blob with a list of all queues
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/api.BatchQueue'
+            type: array
+      summary: List all queues
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Check the health of the API
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.Status'
+      summary: Health check endpoint
+  /jobs:
+    get:
+      consumes:
+      - application/json
+      description: Returns a JSON blob with a list of all jobs
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/types.Job'
+            type: array
+      summary: List all jobs
+    post:
+      consumes:
+      - application/json
+      description: Create a new job by uploading a JSON specification
+      parameters:
+      - description: Job Specification
+        in: body
+        name: job
+        required: true
+        schema:
+          $ref: '#/definitions/types.Job'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/types.Job'
+      summary: Create a new job
+  /pipeline:
+    get:
+      consumes:
+      - application/json
+      description: Returns a JSON blob with a list of all jobs
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/types.Pipeline'
+            type: array
+      summary: List all available pipelines
+swagger: "2.0"
