@@ -211,7 +211,7 @@ export default {
   data() {
     return {
       form: {
-        region: 'us-west-2',
+        region: '',
         uniquePrefix: '',
         computeEnvName: '',
         jobQueueName: '',
@@ -278,7 +278,7 @@ export default {
 
         console.log('Submitting form data:', formData)
 
-        const response = await axios.post('/v1/batch/setup', formData)
+        const response = await axios.post('/api/v1/batch/setup', formData)
         
         this.statusMessage = 'AWS Batch setup completed successfully!'
         this.statusType = 'success'
@@ -298,7 +298,7 @@ export default {
     },
     resetForm() {
       this.form = {
-        region: 'us-west-2',
+        region: '',
         uniquePrefix: '',
         computeEnvName: '',
         jobQueueName: '',

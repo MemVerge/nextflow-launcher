@@ -12,11 +12,29 @@ post {
 
 body:json {
   {
-      "name": "hello-v12",
-      "pipeline": "hello",
-      "work_dir": "s3://nextflow-workbucket-qnib-us-east-1",
-      "result_dir": "s3://nextflow-outbucket-qnib-us-east-1",
-      "job_queue": "euw2v11-spot-intel-rcm"
+      "name": "Create Job",
+      "type": "http",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/jobs",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "type": "json",
+          "raw": {
+            "pipeline": "{{pipeline_name}}",
+            "work_dir": "{{work_dir}}",
+            "result_dir": "{{result_dir}}",
+            "parameters": {
+              "input": "{{input_file}}"
+            }
+          }
+        }
+      }
   }
   
 }

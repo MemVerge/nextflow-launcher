@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"log"
 
 	"github.com/ChristianKniep/mv-launcher-api/pkg/api"
@@ -12,27 +11,24 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-//go:embed vue/dist/*
-var embeddedFiles embed.FS
-
 // @contact.name   GTM MemVerge Inc.
 
 func main() {
 	router := gin.Default()
 
-	// Configure CORS
+	// Configure CORS for production
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOrigins: []string{
+			"http://localhost:3000",    // Local development
+			"http://localhost:3001",    // Local development alternative port
+			"https://*.amazonaws.com",  // AWS ALB domain
+			"https://*.cloudfront.net", // If using CloudFront
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 	}))
-
-	// Serve static files
-	router.Static("/static", "./vue/dist")
-	router.StaticFile("/", "./vue/dist/index.html")
-	router.StaticFile("/favicon.ico", "./vue/dist/favicon.ico")
 
 	// Create API instance
 	apiInstance := api.NewAPI()

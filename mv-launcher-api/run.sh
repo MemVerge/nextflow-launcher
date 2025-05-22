@@ -55,9 +55,27 @@ if [ -z "$pipeline" ] || [ -z "$profile" ] || [ -z "$work_dir" ] || [ -z "$resul
     exit 1
 fi
 
-# Pull credentials from env (if present)
+# Get AWS credentials from environment or prompt
 access_key="${AWS_ACCESS_KEY_ID:-}"
 secret_key="${AWS_SECRET_ACCESS_KEY:-}"
+region="${AWS_REGION:-}"
+
+if [ -z "$access_key" ]; then
+    read -p "Enter AWS Access Key ID: " access_key
+fi
+
+if [ -z "$secret_key" ]; then
+    read -p "Enter AWS Secret Access Key: " secret_key
+fi
+
+if [ -z "$region" ]; then
+    read -p "Enter AWS Region: " region
+fi
+
+# Export credentials for the application
+export AWS_ACCESS_KEY_ID="$access_key"
+export AWS_SECRET_ACCESS_KEY="$secret_key"
+export AWS_REGION="$region"
 
 echo "Generating aws.config with dynamic credentials..."
 

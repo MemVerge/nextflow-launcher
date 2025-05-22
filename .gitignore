@@ -1,4 +1,29 @@
-# Go specific
+# Test environment
+/test-env/
+/test-deployment/
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+
+# Go
 *.exe
 *.exe~
 *.dll
@@ -7,25 +32,18 @@
 *.test
 *.out
 /vendor/
-/bin/
+
+# AWS
+.aws/
+aws.json
+**/test_env/aws.config
+**/test_env/job.json
+**/test_env/*.json
+**/test_env/*.config
+**/test_env/*.sh
+**/test_env/
 
 # Vue.js specific
-node_modules/
-/dist/
-.env
-.env.local
-.env.*.local
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
-
-# IDE specific
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
-
-# AWS specific
-.aws/
-aws.json 
+yarn-error.log* 

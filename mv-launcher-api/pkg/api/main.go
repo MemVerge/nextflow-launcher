@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	PipelineBucket = getEnvOrDefault("PIPELINE_BUCKET", "nextflow-pipelines-memverge-launcher")
-	JobBucket      = getEnvOrDefault("JOB_BUCKET", "usw2-nextflow-pipeline-workflow")
-	LogBucket      = getEnvOrDefault("LOG_BUCKET", "aharish-memverge-nextflow")
-	AwsRegion      = getEnvOrDefault("AWS_REGION", "us-west-2")
+	PipelineBucket = getEnvOrDefault("PIPELINE_BUCKET", "")
+	JobBucket      = getEnvOrDefault("JOB_BUCKET", "")
+	LogBucket      = getEnvOrDefault("LOG_BUCKET", "")
+	AwsRegion      = getEnvOrDefault("AWS_REGION", "")
 	JobRoleArn     = getEnvOrDefault("JOB_ROLE_ARN", "")
 )
 
