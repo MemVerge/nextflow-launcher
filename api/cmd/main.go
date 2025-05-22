@@ -3,7 +3,8 @@ package main
 import (
 	"log"
 
-	"github.com/ChristianKniep/mv-launcher-api/pkg/api"
+	"github.com/MemVerge/nextflow-launcher/api/internal/api"
+	"github.com/MemVerge/nextflow-launcher/api/internal/config"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
@@ -14,6 +15,7 @@ import (
 // @contact.name   GTM MemVerge Inc.
 
 func main() {
+	cfg := config.Load()
 	router := gin.Default()
 
 	// Configure CORS for production

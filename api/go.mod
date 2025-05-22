@@ -1,6 +1,6 @@
-module github.com/ChristianKniep/mv-launcher-api
+module github.com/MemVerge/nextflow-launcher/api
 
-go 1.23.0
+go 1.21
 
 toolchain go1.23.9
 
