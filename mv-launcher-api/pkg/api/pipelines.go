@@ -1,11 +1,7 @@
 package api
 
 import (
-	"context"
-	"log"
-
-	"github.com/ChristianKniep/mv-launcher-api/pkg/sss"
-	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/MemVerge/nf-launcher/pkg/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,16 +12,10 @@ import (
 // @Success 200 {object} types.Pipelines
 // @Router /pipeline [get]
 func (a API) ListPipelines(c *gin.Context) {
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(AwsRegion))
-	if err != nil {
-		log.Fatalf("failed to create session, %v", err)
-	}
-
-	pipelines, err := sss.GetPipelines(cfg, PipelineBucket)
+	pipelines, err := services.GetPipelines(a.s3Client, a.config.PipelineBucket)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(200, pipelines)
 }

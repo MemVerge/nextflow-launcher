@@ -465,9 +465,26 @@ export default {
   background-color: white;
 }
 
+.form-select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  z-index: 1;
+  position: relative;
+}
+
+.form-select option {
+  background-color: white;
+  color: black;
+  padding: 8px;
+}
+
 .input-group {
   display: flex;
   gap: 1rem;
+  align-items: center;
 }
 
 .input-group .form-select {

@@ -186,20 +186,6 @@
               </div>
             </div>
           </div>
-
-          <div class="job-logs-section">
-            <h4>Container Logs</h4>
-            <div class="logs-container">
-              <div v-if="loadingLogs" class="loading-logs">Loading logs...</div>
-              <div v-else-if="logs.length === 0" class="no-logs">No logs available</div>
-              <div v-else class="logs-content">
-                <div v-for="(log, index) in logs" :key="index" class="log-entry">
-                  <span class="log-timestamp">{{ formatDate(log.timestamp) }}</span>
-                  <span class="log-message">{{ log.message }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -270,16 +256,6 @@ export default {
 
     const showJobDetails = async (job) => {
       selectedJob.value = job
-      loadingLogs.value = true
-      logs.value = []
-      try {
-        const response = await axios.get(`/v1/jobs/${job.id}/logs`)
-        logs.value = response.data.cloudwatch_logs || []
-      } catch (error) {
-        logs.value = []
-      } finally {
-        loadingLogs.value = false
-      }
     }
 
     const closeModal = () => {

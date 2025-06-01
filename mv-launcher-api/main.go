@@ -1,82 +1,65 @@
 package main
 
 import (
-	"embed"
+	"context"
+	"fmt"
 	"log"
 
-	"github.com/ChristianKniep/mv-launcher-api/pkg/api"
-	"github.com/gin-contrib/cors"
+	"github.com/MemVerge/nf-launcher/pkg/api"
+	configlocal "github.com/MemVerge/nf-launcher/pkg/config"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/batch"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
-
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-//go:embed vue/dist/*
-var embeddedFiles embed.FS
-
-// @contact.name   GTM MemVerge Inc.
-
 func main() {
+	// Load configuration
+	cfg, err := configlocal.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	// Load AWS config
+	awsCfg, err := awsconfig.LoadDefaultConfig(
+		context.Background(),
+		awsconfig.WithRegion(cfg.AWSRegion),
+	)
+	if err != nil {
+		log.Fatalf("Failed to load AWS config: %v", err)
+	}
+
+	// Initialize AWS clients
+	batchClient := batch.NewFromConfig(awsCfg)
+	s3Client := s3.NewFromConfig(awsCfg)
+
+	// Initialize API
+	apiInstance := api.NewAPI(cfg, batchClient, s3Client)
+
+	// Create router
 	router := gin.Default()
 
 	// Configure CORS
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-	}))
+	router.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", cfg.CORSAllowedOrigins[0])
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
-	// Serve static files
-	router.Static("/static", "./vue/dist")
-	router.StaticFile("/", "./vue/dist/index.html")
-	router.StaticFile("/favicon.ico", "./vue/dist/favicon.ico")
-
-	// Create API instance
-	apiInstance := api.NewAPI()
-
-	// API routes
-	v1 := router.Group("/v1")
-	{
-		// Health check
-		v1.GET("/health", api.Health)
-
-		// Bucket routes
-		buckets := v1.Group("/buckets")
-		{
-			buckets.GET("", apiInstance.ListBuckets)
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
 		}
 
-		// Pipeline routes
-		pipelines := v1.Group("/pipelines")
-		{
-			pipelines.GET("", apiInstance.ListPipelines)
-		}
+		c.Next()
+	})
 
-		// Job routes
-		jobs := v1.Group("/jobs")
-		{
-			jobs.GET("", apiInstance.ListJobs)
-			jobs.POST("", apiInstance.CreateJob)
-			jobs.GET("/:id/logs", apiInstance.GetJobLogs)
-			jobs.GET("/:id/log-url", apiInstance.GetJobLogPresignedURL)
-		}
-
-		// Batch routes
-		batch := v1.Group("/batch")
-		{
-			batch.GET("/queues", apiInstance.ListQueues)
-			batch.POST("/setup", apiInstance.SetupAWSBatch)
-		}
-	}
-
-	// use ginSwagger middleware to serve the API docs
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Register routes
+	apiInstance.RegisterRoutes(router)
 
 	// Start server
-	if err := router.Run(":8080"); err != nil {
-		log.Fatal("Failed to start server:", err)
+	log.Printf("Starting server on port %d", cfg.Port)
+	if err := router.Run(fmt.Sprintf(":%d", cfg.Port)); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
 	}
 }

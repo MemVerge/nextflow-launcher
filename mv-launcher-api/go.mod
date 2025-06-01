@@ -1,4 +1,4 @@
-module github.com/ChristianKniep/mv-launcher-api
+module github.com/MemVerge/nf-launcher
 
 go 1.23.0
 
@@ -6,17 +6,12 @@ toolchain go1.23.5
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3
-	github.com/aws/aws-sdk-go-v2/config v1.29.14
+	github.com/aws/aws-sdk-go-v2/config v1.27.7
 	github.com/aws/aws-sdk-go-v2/service/batch v1.35.1
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.32.0
-	github.com/aws/aws-sdk-go-v2/service/iam v1.31.0
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.79.3
-	github.com/gin-contrib/cors v1.7.5
-	github.com/gin-gonic/gin v1.10.0
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.51.4
+	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.6.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/swaggo/files v1.0.1
-	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
 )
 

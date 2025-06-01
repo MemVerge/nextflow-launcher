@@ -9,13 +9,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ChristianKniep/mv-launcher-api/pkg/sss"
-	"github.com/ChristianKniep/mv-launcher-api/pkg/types"
+	"github.com/MemVerge/nf-launcher/pkg/services"
+	"github.com/MemVerge/nf-launcher/pkg/types"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/batch"
 	batchtypes "github.com/aws/aws-sdk-go-v2/service/batch/types"
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -65,21 +63,14 @@ func (a API) CreateJob(c *gin.Context) {
 		pJob.MaxRetries = 5
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(AwsRegion))
-	if err != nil {
-		log.Printf("Error loading AWS config: %v", err)
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-
 	// Store job in S3
-	log.Printf("Storing job in S3 bucket: %s", JobBucket)
+	log.Printf("Storing job in S3 bucket: %s", a.config.JobBucket)
 	// Generate job ID if not provided
 	if pJob.ID == "" {
 		id := uuid.New()
 		pJob.ID = id.String()
 	}
-	err = sss.PutJob(cfg, JobBucket, pJob)
+	err := services.PutJob(a.s3Client, a.config.JobBucket, pJob)
 	if err != nil {
 		log.Printf("Error storing job in S3: %v", err)
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -87,126 +78,55 @@ func (a API) CreateJob(c *gin.Context) {
 	}
 	log.Printf("Job %s stored successfully in S3", pJob.ID)
 
-	// Check if job definition exists, create if it doesn't
-	jobDefName := "nextflow-headnode-launcher"
-	log.Printf("Using job definition: %s", jobDefName)
-
-	describeInput := &batch.DescribeJobDefinitionsInput{
-		JobDefinitionName: aws.String(jobDefName),
-		Status:            aws.String("ACTIVE"),
-	}
-
-	describeOutput, err := a.BatchClient.DescribeJobDefinitions(context.TODO(), describeInput)
-	if err != nil {
-		log.Printf("Error describing job definitions: %v", err)
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-
-	if len(describeOutput.JobDefinitions) == 0 {
-		log.Printf("Job definition not found, creating new one")
-		registerInput := &batch.RegisterJobDefinitionInput{
-			JobDefinitionName: aws.String(jobDefName),
-			Type:              batchtypes.JobDefinitionTypeContainer,
-			ContainerProperties: &batchtypes.ContainerProperties{
-				Image:  aws.String("achyutha98/nextflow:latest"),
-				Vcpus:  aws.Int32(4),
-				Memory: aws.Int32(16384),
-				Command: []string{
-					"nextflow",
-					"run",
-					"Ref::pipeline",
-					"-work-dir",
-					"Ref::work_dir",
-					"-resume",
-					"-profile",
-					"Ref::profile",
-					"--outdir",
-					"Ref::outdir",
-					"--input",
-					"Ref::input_dir",
-				},
-				JobRoleArn: aws.String(JobRoleArn),
-				Environment: []batchtypes.KeyValuePair{
-					{
-						Name:  aws.String("NXF_ANSI_LOG"),
-						Value: aws.String("false"),
-					},
-					{
-						Name:  aws.String("NXF_OPTS"),
-						Value: aws.String("-Xms1g -Xmx12g"),
-					},
-				},
-			},
-		}
-
-		_, err = a.BatchClient.RegisterJobDefinition(context.TODO(), registerInput)
-		if err != nil {
-			log.Printf("Error creating job definition: %v", err)
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-		log.Printf("Job definition created successfully")
-	} else {
-		log.Printf("Using existing job definition: %s", *describeOutput.JobDefinitions[0].JobDefinitionArn)
-		jobDefName = *describeOutput.JobDefinitions[0].JobDefinitionArn
-	}
-
 	// Submit job to AWS Batch
-	log.Printf("Submitting job to queue: %s", pJob.HeadNodeQueue)
-	submitInput := &batch.SubmitJobInput{
-		JobName:       &pJob.Name,
-		JobQueue:      &pJob.HeadNodeQueue,
-		JobDefinition: aws.String("nextflow-headnode-launcher"),
+	jobDefinition := fmt.Sprintf("%s-nextflow-headnode", a.config.Environment)
+	log.Printf("Using job definition: %s", jobDefinition)
+
+	// Create job submission
+	jobInput := &batch.SubmitJobInput{
+		JobName:       aws.String(pJob.ID),
+		JobQueue:      aws.String(pJob.HeadNodeQueue),
+		JobDefinition: aws.String(jobDefinition),
 		ContainerOverrides: &batchtypes.ContainerOverrides{
 			Environment: []batchtypes.KeyValuePair{
-				{
-					Name:  aws.String("JOB_SPEC_PATH"),
-					Value: aws.String(fmt.Sprintf("s3://%s/job-%s.json", JobBucket, pJob.ID)),
-				},
-				{
-					Name:  aws.String("AWS_ACCESS_KEY_ID"),
-					Value: aws.String(pJob.AWSAccessKey),
-				},
-				{
-					Name:  aws.String("AWS_SECRET_ACCESS_KEY"),
-					Value: aws.String(pJob.AWSSecretKey),
-				},
-				{
-					Name:  aws.String("AWS_REGION"),
-					Value: aws.String(AwsRegion),
-				},
 				{
 					Name:  aws.String("JOB_ID"),
 					Value: aws.String(pJob.ID),
 				},
 				{
-					Name:  aws.String("NEXTFLOW_LOG_PATH"),
-					Value: aws.String("/var/log/nextflow/nextflow.log"),
+					Name:  aws.String("PIPELINE"),
+					Value: aws.String(pJob.Pipeline),
+				},
+				{
+					Name:  aws.String("WORK_DIR"),
+					Value: aws.String(pJob.WorkDir),
+				},
+				{
+					Name:  aws.String("RESULT_DIR"),
+					Value: aws.String(pJob.ResultDir),
 				},
 				{
 					Name:  aws.String("LOG_BUCKET"),
 					Value: aws.String(pJob.LogBucket),
 				},
-				{
-					Name:  aws.String("NXF_WORK"),
-					Value: aws.String("/workspace/work"),
-				},
 			},
 		},
 	}
 
-	submitOutput, err := a.BatchClient.SubmitJob(context.TODO(), submitInput)
+	// Submit the job
+	result, err := a.batchClient.SubmitJob(context.TODO(), jobInput)
 	if err != nil {
 		log.Printf("Error submitting job to AWS Batch: %v", err)
-		c.JSON(500, gin.H{"error": "Failed to submit job: " + err.Error()})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	log.Printf("Job submitted successfully with ID: %s", *submitOutput.JobId)
 
-	c.JSON(201, gin.H{
-		"message": "Job submitted successfully",
-		"jobId":   submitOutput.JobId,
+	// Return job details
+	c.JSON(200, gin.H{
+		"id":     pJob.ID,
+		"name":   pJob.Name,
+		"status": "SUBMITTED",
+		"arn":    result.JobArn,
 	})
 }
 
@@ -236,13 +156,7 @@ func (a API) ListJobs(c *gin.Context) {
 	}
 
 	// Fetch all job specs from S3
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(AwsRegion))
-	if err != nil {
-		log.Printf("Error loading AWS config: %v", err)
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-	jobSpecs, err := sss.GetJobs(cfg, JobBucket)
+	jobSpecs, err := services.GetJobs(a.s3Client, a.config.JobBucket)
 	if err != nil {
 		log.Printf("Error fetching job specs from S3: %v", err)
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -263,7 +177,7 @@ func (a API) ListJobs(c *gin.Context) {
 		}
 
 		log.Printf("Listing jobs with status %s from queue: %s", status, queue)
-		listOutput, err := a.BatchClient.ListJobs(context.TODO(), listInput)
+		listOutput, err := a.batchClient.ListJobs(context.TODO(), listInput)
 		if err != nil {
 			log.Printf("Error listing jobs with status %s from queue %s: %v", status, queue, err)
 			continue
@@ -287,7 +201,7 @@ func (a API) ListJobs(c *gin.Context) {
 		describeInput := &batch.DescribeJobsInput{
 			Jobs: jobIds[i:end],
 		}
-		describeOutput, err := a.BatchClient.DescribeJobs(context.TODO(), describeInput)
+		describeOutput, err := a.batchClient.DescribeJobs(context.TODO(), describeInput)
 		if err != nil {
 			log.Printf("Error describing jobs: %v", err)
 			continue
@@ -408,6 +322,14 @@ func (a API) ListJobs(c *gin.Context) {
 	c.JSON(200, jobsWithStatus)
 }
 
+type JobLogs struct {
+	NextflowLog string `json:"nextflow_log"`
+	Status      string `json:"status"`
+	Message     string `json:"message"`
+	JobName     string `json:"job_name,omitempty"`
+	BatchJobId  string `json:"batch_job_id,omitempty"`
+}
+
 // @Summary Get job logs
 // @Description Get CloudWatch logs and nextflow.log for a specific job
 // @Accept  json
@@ -415,19 +337,79 @@ func (a API) ListJobs(c *gin.Context) {
 // @Param   id path string true "Job ID"
 // @Success 200 {object} JobLogs
 // @Router /jobs/{id}/logs [get]
-func (a API) GetJobLogs(c *gin.Context) {
+func (a *API) GetJobLogs(c *gin.Context) {
 	jobID := c.Param("id")
 	if jobID == "" {
 		c.JSON(400, gin.H{"error": "Job ID is required"})
 		return
 	}
 
-	// Get job details directly using DescribeJobs
-	describeInput := &batch.DescribeJobsInput{
-		Jobs: []string{jobID},
+	log.Printf("Fetching logs for job ID: %s", jobID)
+
+	// Try to get job spec from S3
+	jobSpec, err := services.GetJob(a.s3Client, a.config.JobBucket, jobID)
+	if err != nil {
+		log.Printf("Error getting job spec from S3: %v", err)
+		// Continue with job ID as name, as it might be the actual job name
 	}
 
-	describeOutput, err := a.BatchClient.DescribeJobs(context.TODO(), describeInput)
+	// Use job name from spec if available, otherwise use the ID
+	jobName := jobID
+	if jobSpec != nil {
+		jobName = jobSpec.Name
+		log.Printf("Found job spec in S3, using job name: %s", jobName)
+	}
+
+	// Get job details from AWS Batch
+	listInput := &batch.ListJobsInput{
+		JobQueue: aws.String("launcher-test-on-demand-MM-Batch-JobQueue"),
+	}
+
+	// Try all possible job statuses
+	validStatuses := []batchtypes.JobStatus{
+		batchtypes.JobStatusSubmitted,
+		batchtypes.JobStatusPending,
+		batchtypes.JobStatusRunnable,
+		batchtypes.JobStatusStarting,
+		batchtypes.JobStatusRunning,
+		batchtypes.JobStatusSucceeded,
+		batchtypes.JobStatusFailed,
+	}
+
+	var foundJob *batchtypes.JobSummary
+	for _, status := range validStatuses {
+		listInput.JobStatus = status
+		listOutput, err := a.batchClient.ListJobs(context.TODO(), listInput)
+		if err != nil {
+			log.Printf("Error listing jobs with status %s: %v", status, err)
+			continue
+		}
+
+		// Search for the job by name
+		for _, job := range listOutput.JobSummaryList {
+			if *job.JobName == jobName {
+				foundJob = &job
+				log.Printf("Found job with name %s in status %s", jobName, status)
+				break
+			}
+		}
+		if foundJob != nil {
+			break
+		}
+	}
+
+	if foundJob == nil {
+		log.Printf("Job not found with name: %s", jobName)
+		c.JSON(404, gin.H{"error": "Job not found"})
+		return
+	}
+
+	// Get job details from AWS Batch
+	describeInput := &batch.DescribeJobsInput{
+		Jobs: []string{*foundJob.JobId},
+	}
+
+	describeOutput, err := a.batchClient.DescribeJobs(context.TODO(), describeInput)
 	if err != nil {
 		log.Printf("Error describing job: %v", err)
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -435,125 +417,45 @@ func (a API) GetJobLogs(c *gin.Context) {
 	}
 
 	if len(describeOutput.Jobs) == 0 {
-		// Try to find the job in the list of all jobs
-		listInput := &batch.ListJobsInput{
-			JobQueue: aws.String("launcher-test-on-demand-MM-Batch-JobQueue"),
-		}
-
-		listOutput, err := a.BatchClient.ListJobs(context.TODO(), listInput)
-		if err != nil {
-			log.Printf("Error listing jobs: %v", err)
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		// Search for the job by name
-		var foundJob *batchtypes.JobSummary
-		for _, job := range listOutput.JobSummaryList {
-			if *job.JobName == jobID {
-				foundJob = &job
-				break
-			}
-		}
-
-		if foundJob == nil {
-			c.JSON(404, gin.H{"error": "Job not found"})
-			return
-		}
-
-		// Get job details using the found job ID
-		describeInput = &batch.DescribeJobsInput{
-			Jobs: []string{*foundJob.JobId},
-		}
-
-		describeOutput, err = a.BatchClient.DescribeJobs(context.TODO(), describeInput)
-		if err != nil {
-			log.Printf("Error describing job: %v", err)
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		if len(describeOutput.Jobs) == 0 {
-			c.JSON(404, gin.H{"error": "Job not found"})
-			return
-		}
+		log.Printf("No job details found for job ID: %s", *foundJob.JobId)
+		c.JSON(404, gin.H{"error": "Job not found"})
+		return
 	}
 
 	jobDetail := describeOutput.Jobs[0]
-
-	type LogEntry struct {
-		Timestamp time.Time `json:"timestamp"`
-		Message   string    `json:"message"`
-	}
-
-	type JobLogs struct {
-		CloudWatchLogs []LogEntry `json:"cloudwatch_logs"`
-		NextflowLog    string     `json:"nextflow_log"`
-	}
+	log.Printf("Found job details - Name: %s, Status: %s", *jobDetail.JobName, jobDetail.Status)
 
 	var logs JobLogs
+	logs.Status = string(jobDetail.Status)
+	logs.JobName = *jobDetail.JobName
+	logs.BatchJobId = *jobDetail.JobId
 
-	// Get container logs from CloudWatch
-	if jobDetail.Container != nil && jobDetail.Container.LogStreamName != nil {
-		logStreamName := *jobDetail.Container.LogStreamName
-		logGroupName := "/aws/batch/job"
-
-		// Create CloudWatch Logs client
-		cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(AwsRegion))
-		if err != nil {
-			log.Printf("Error loading AWS config: %v", err)
-		} else {
-			cloudwatchLogs := cloudwatchlogs.NewFromConfig(cfg)
-
-			// Get log events
-			getLogEventsInput := &cloudwatchlogs.GetLogEventsInput{
-				LogGroupName:  aws.String(logGroupName),
-				LogStreamName: aws.String(logStreamName),
-				StartFromHead: aws.Bool(true),
-			}
-
-			for {
-				output, err := cloudwatchLogs.GetLogEvents(context.TODO(), getLogEventsInput)
-				if err != nil {
-					log.Printf("Error getting log events: %v", err)
-					break
-				}
-
-				for _, event := range output.Events {
-					logs.CloudWatchLogs = append(logs.CloudWatchLogs, LogEntry{
-						Timestamp: time.UnixMilli(*event.Timestamp),
-						Message:   *event.Message,
-					})
-				}
-
-				// If there are no more events or we've reached the end, break
-				if output.NextForwardToken == nil {
-					break
-				}
-				if getLogEventsInput.NextToken != nil && *output.NextForwardToken == *getLogEventsInput.NextToken {
-					break
-				}
-
-				// Update the token for the next iteration
-				getLogEventsInput.NextToken = output.NextForwardToken
-			}
+	// Try to get Nextflow log from S3 if job is completed
+	if jobDetail.Status == batchtypes.JobStatusSucceeded || jobDetail.Status == batchtypes.JobStatusFailed {
+		logKey := fmt.Sprintf("jobs/%s/nextflow.log", jobID)
+		getObjectInput := &s3.GetObjectInput{
+			Bucket: aws.String(a.config.LogBucket),
+			Key:    aws.String(logKey),
 		}
-	}
 
-	// Try to get Nextflow log from S3
-	logKey := fmt.Sprintf("jobs/%s/nextflow.log", jobID)
-	getObjectInput := &s3.GetObjectInput{
-		Bucket: aws.String(LogBucket),
-		Key:    aws.String(logKey),
-	}
-
-	result, err := a.S3Client.GetObject(context.TODO(), getObjectInput)
-	if err == nil {
-		defer result.Body.Close()
-		body, err := io.ReadAll(result.Body)
+		result, err := a.s3Client.GetObject(context.TODO(), getObjectInput)
 		if err == nil {
-			logs.NextflowLog = string(body)
+			defer result.Body.Close()
+			body, err := io.ReadAll(result.Body)
+			if err == nil {
+				logs.NextflowLog = string(body)
+				log.Printf("Successfully retrieved Nextflow log from S3 for job: %s", *jobDetail.JobName)
+			} else {
+				log.Printf("Error reading S3 log file: %v", err)
+				logs.Message = fmt.Sprintf("Error reading S3 log file: %v", err)
+			}
+		} else {
+			log.Printf("Error getting S3 log file: %v", err)
+			logs.Message = fmt.Sprintf("Nextflow log not available in S3 yet: %v", err)
 		}
+	} else {
+		log.Printf("Job %s is not completed yet, Nextflow log will be available after completion", *jobDetail.JobName)
+		logs.Message = "Nextflow log will be available after job completion"
 	}
 
 	c.JSON(200, logs)
@@ -573,17 +475,38 @@ func (a *API) GetJobLogPresignedURL(c *gin.Context) {
 		return
 	}
 
-	logBucket := LogBucket
-	logKey := fmt.Sprintf("jobs/%s/nextflow.log", jobID)
-	presignClient := s3.NewPresignClient(a.S3Client)
-	presignInput := &s3.GetObjectInput{
-		Bucket: aws.String(logBucket),
-		Key:    aws.String(logKey),
+	log.Printf("Fetching presigned URL for job ID: %s", jobID)
+
+	// Get job logs from S3
+	getObjectInput := &s3.GetObjectInput{
+		Bucket: aws.String(a.config.LogBucket),
+		Key:    aws.String(fmt.Sprintf("jobs/%s/nextflow.log", jobID)),
 	}
-	presignResult, err := presignClient.PresignGetObject(context.TODO(), presignInput, s3.WithPresignExpires(5*time.Minute))
+
+	result, err := a.s3Client.GetObject(context.TODO(), getObjectInput)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to generate presigned URL"})
+		log.Printf("Error getting job logs from S3: %v", err)
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"url": presignResult.URL})
+	defer result.Body.Close()
+
+	// Get presigned URL for the log file
+	presignClient := s3.NewPresignClient(a.s3Client)
+	presignedURL, err := presignClient.PresignGetObject(context.TODO(), &s3.GetObjectInput{
+		Bucket: aws.String(a.config.LogBucket),
+		Key:    aws.String(fmt.Sprintf("jobs/%s/nextflow.log", jobID)),
+	})
+	if err != nil {
+		log.Printf("Error generating presigned URL: %v", err)
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"url": presignedURL.URL})
+}
+
+// GetJob retrieves a job by ID
+func (a *API) GetJob(jobID string) (*types.Job, error) {
+	return services.GetJob(a.s3Client, a.config.JobBucket, jobID)
 }
