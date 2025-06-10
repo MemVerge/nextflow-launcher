@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Setup AWS resources for Nextflow Launcher'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Description: Environment name (e.g., dev, prod)
+    Default: dev
+
+  NextflowImage:
+    Type: String
+    Description: ECR image URI for Nextflow container
+    Default: achyutha98/nextflow:latest
+
+Resources:
+  # S3 Buckets
+  PipelineBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-nextflow-pipeline-workflow
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+
+  JobBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-nextflow-job-specs
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+
+  LogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-nextflow-logs
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+
+  # IAM Role for Nextflow Headnode
+  NextflowHeadnodeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${PipelineBucket}
+                  - !Sub arn:aws:s3:::${PipelineBucket}/*
+                  - !Sub arn:aws:s3:::${JobBucket}
+                  - !Sub arn:aws:s3:::${JobBucket}/*
+                  - !Sub arn:aws:s3:::${LogBucket}
+                  - !Sub arn:aws:s3:::${LogBucket}/*
+
+  # AWS Batch Job Definition
+  NextflowHeadnodeJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      JobDefinitionName: !Sub ${EnvironmentName}-nextflow-headnode
+      Type: container
+      ContainerProperties:
+        Image: !Ref NextflowImage
+        JobRoleArn: !GetAtt NextflowHeadnodeRole.Arn
+        ExecutionRoleArn: !GetAtt NextflowHeadnodeRole.Arn
+        ResourceRequirements:
+          - Type: VCPU
+            Value: 4
+          - Type: MEMORY
+            Value: 16384
+        Environment:
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: PIPELINE_BUCKET
+            Value: !Ref PipelineBucket
+          - Name: JOB_BUCKET
+            Value: !Ref JobBucket
+          - Name: LOG_BUCKET
+            Value: !Ref LogBucket
+
+Outputs:
+  PipelineBucket:
+    Description: Pipeline bucket name
+    Value: !Ref PipelineBucket
+
+  JobBucket:
+    Description: Job bucket name
+    Value: !Ref JobBucket
+
+  LogBucket:
+    Description: Log bucket name
+    Value: !Ref LogBucket
+
+  NextflowHeadnodeRole:
+    Description: IAM role ARN for Nextflow headnode
+    Value: !GetAtt NextflowHeadnodeRole.Arn
+
+  NextflowHeadnodeJobDefinition:
+    Description: AWS Batch job definition ARN
+    Value: !Ref NextflowHeadnodeJobDefinition 
